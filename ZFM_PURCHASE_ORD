@@ -1,0 +1,122 @@
+FUNCTION zfm_purchase_ord.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     REFERENCE(SEBELN) TYPE  ZIT_EBELN
+*"     REFERENCE(SAEDAT) TYPE  ZIT_AEDAT
+*"  EXPORTING
+*"     REFERENCE(LV_OUTPUT) TYPE  ZIT_OUTPUT_PURORD
+*"----------------------------------------------------------------------
+
+  TYPES:
+    BEGIN OF lty_ekko,
+      ebeln TYPE ebeln,
+      aedat TYPE mmpur_erdat,
+      ernam TYPE mmpur_ernam,
+    END OF lty_ekko.
+
+  TYPES:
+    BEGIN OF lty_ekpo,
+      ebeln TYPE EBELN,
+      ebelp TYPE ebelp,
+      matnr TYPE matnr,
+      netpr TYPE bprei,
+    END OF lty_ekpo.
+
+ TYPES:
+ BEGIN OF lty_makt,
+   matnr type matnr,
+   maktx type maktx,
+ END OF lty_makt.
+
+ DATA: lt_ekko  TYPE TABLE OF lty_ekko,
+       lwa_ekko TYPE lty_ekko.
+
+ DATA: lt_ekpo TYPE TABLE OF lty_ekpo,
+       lt_temp_ekpo TYPE TABLE OF lty_ekpo,
+       lwa_ekpo TYPE lty_ekpo.
+
+ DATA: lt_makt TYPE TABLE OF lty_makt,
+       lwa_makt TYPE lty_makt.
+
+ DATA: ls_output TYPE ZSTR_OUTPUT_PURORD.
+
+*header data
+  SELECT ebeln
+         aedat
+         ernam
+  FROM ekko INTO TABLE lt_ekko
+    WHERE ebeln IN sebeln
+    AND aedat IN saedat.
+
+*item data
+IF lt_ekko IS NOT INITIAL.
+  SELECT ebeln
+         ebelp
+         matnr
+         netpr
+   FROM ekpo INTO TABLE lt_ekpo
+   FOR ALL ENTRIES IN lt_ekko
+    WHERE ebeln = lt_ekko-ebeln.
+ENDIF.
+
+IF lt_ekpo IS NOT INITIAL.
+* duplicate MAKTX is getting fetched from makt, to solve this,
+* delete the duplicate MATNR from internal table lt_ekko.(don't
+* change the original IT.) Then fetch MAKTX.
+* Logic for deleting duplicate MATNR.
+
+  lt_temp_ekpo = lt_ekpo.
+  SORT lt_temp_ekpo BY matnr.
+  DELETE ADJACENT DUPLICATES FROM lt_temp_ekpo COMPARING matnr.
+
+  SELECT matnr
+         maktx
+    FROM makt INTO TABLE lt_makt
+    FOR ALL ENTRIES IN lt_temp_ekpo
+    WHERE matnr = lt_temp_ekpo-matnr
+*    AND spras = 'EN'.
+    AND spras = sy-langu.
+
+ENDIF.
+
+LOOP AT lt_ekko INTO lwa_ekko.
+  READ TABLE lt_ekpo into lwa_ekpo WITH KEY ebeln = lwa_ekko-ebeln.
+  IF sy-subrc = 0.
+    DATA(lv_index) = sy-tabix.
+  ENDIF.
+  LOOP AT lt_ekpo INTO lwa_ekpo FROM lv_index.
+    ls_output-ebeln = lwa_ekko-ebeln.
+    ls_output-ebelp = lwa_ekpo-ebelp.
+    ls_output-aedat = lwa_ekko-aedat.
+    ls_output-matnr = lwa_ekpo-matnr.
+    ls_output-netpr = lwa_ekpo-netpr.
+    ls_output-ernam = lwa_ekko-ernam.
+    READ TABLE lt_makt INTO lwa_makt WITH KEY matnr = lwa_ekpo-matnr.
+    ls_output-maktx = lwa_makt-maktx.
+    APPEND ls_output TO lv_output.
+    CLEAR ls_output.
+  ENDLOOP.
+ENDLOOP.
+
+ENDFUNCTION.
+
+
+
+
+*LOOP AT lt_ekko INTO lwa_ekko.
+*  ls_output-ebeln = lwa_ekko-ebeln.
+*  READ TABLE lt_ekpo into lwa_ekpo WITH KEY ebeln = lwa_ekko-ebeln.
+*
+*  DATA(lv_index) = sy-tabix.
+*  LOOP AT lt_ekpo INTO lwa_ekpo WHERE ebeln = lwa_ekko-ebeln.
+*    ls_output-ebelp = lwa_ekpo-ebelp.
+*    ls_output-aedat = lwa_ekko-aedat.
+*    ls_output-matnr = lwa_ekpo-matnr.
+*    ls_output-netpr = lwa_ekpo-netpr.
+*    ls_output-ernam = lwa_ekko-ernam.
+*    READ TABLE lt_makt INTO lwa_makt WITH KEY matnr = lwa_ekpo-matnr.
+*    ls_output-maktx = lwa_makt-maktx.
+*    APPEND ls_output TO lv_output.
+*  ENDLOOP.
+*ENDLOOP.
